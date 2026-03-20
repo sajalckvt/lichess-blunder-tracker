@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.db
+*.html
+!templates/*.html
+.env
+venv/
+.venv/

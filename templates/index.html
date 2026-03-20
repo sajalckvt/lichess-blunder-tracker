@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blunder.report — Track your chess blunders</title>
+<meta name="description" content="Analyze your Lichess games, find blunder patterns, and get targeted puzzle recommendations to improve your rating.">
+<meta property="og:title" content="blunder.report — Track your chess blunders">
+<meta property="og:description" content="Analyze your Lichess games, find blunder patterns, and get targeted puzzle recommendations.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://blunder.report">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="blunder.report">
+<meta name="twitter:description" content="Track your chess blunders. Find patterns. Train smarter.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Instrument+Serif&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #0b0b0f; --surface: #111116; --border: #222230;
+    --text: #c8c8d0; --dim: #66667a; --faint: #3a3a4a;
+    --accent: #d4443e; --accent2: #e8956a; --teal: #3eb8a0; --blue: #5b8ad4;
+    --mono: 'JetBrains Mono', monospace; --serif: 'Instrument Serif', Georgia, serif; --sans: 'DM Sans', system-ui, sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; align-items: center; justify-content: center; -webkit-font-smoothing: antialiased; }
+.container { width: 100%; max-width: 480px; padding: 40px 24px; }
+.brand { font-family: var(--mono); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+h1 { font-family: var(--serif); font-size: 36px; font-weight: 400; color: #fff; margin-bottom: 8px; }
+.subtitle { font-size: 14px; color: var(--dim); margin-bottom: 32px; line-height: 1.6; }
+.field { margin-bottom: 16px; }
+.field label { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--faint); display: block; margin-bottom: 6px; }
+.field input, .field select { width: 100%; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 16px; font-family: var(--mono); outline: none; transition: border-color 0.15s; }
+.field input:focus, .field select:focus { border-color: var(--dim); }
+.field input::placeholder { color: var(--faint); }
+.btn { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 6px; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: var(--sans); letter-spacing: 0.5px; transition: opacity 0.15s, transform 0.1s; }
+.btn:hover { opacity: 0.9; } .btn:active { transform: scale(0.98); }
+.error { margin-top: 16px; padding: 12px 16px; background: rgba(212,68,62,0.1); border: 1px solid rgba(212,68,62,0.3); border-radius: 6px; color: var(--accent); font-size: 13px; font-family: var(--mono); line-height: 1.5; }
+
+.loading-overlay { display: none; position: fixed; inset: 0; background: rgba(11,11,15,0.94); z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+.loading-overlay.active { display: flex; }
+.loading-dots { display: flex; gap: 8px; }
+.loading-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse { 0%, 100% { opacity: 0.15; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+
+.coming-soon { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
+.cs-label { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; color: var(--faint); margin-bottom: 14px; }
+.cs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cs-item { padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--dim); line-height: 1.4; }
+.cs-item strong { color: var(--text); font-weight: 500; display: block; margin-bottom: 2px; font-size: 12px; }
+.page-footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.page-footer a { font-family: var(--mono); font-size: 12px; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loader">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+    <div style="font-family: var(--mono); font-size: 13px; color: var(--dim);" id="loader-text">Fetching games from Lichess...</div>
+    <div style="font-family: var(--mono); font-size: 11px; color: var(--faint);" id="loader-sub">This can take 10-30 seconds for 50+ games</div>
+</div>
+
+<div class="container">
+    <div class="brand">blunder.report</div>
+    <h1>Analyze your blunders</h1>
+    <p class="subtitle">Enter your Lichess username to generate a blunder report with training recommendations and puzzle links.</p>
+
+    <form method="POST" action="/report" id="form">
+        <div class="field">
+            <label>Platform</label>
+            <div style="display: flex; gap: 8px;">
+                <div style="flex:1; padding:10px 16px; background:var(--surface); border:1px solid var(--accent); border-radius:6px; color:#fff; font-family:var(--mono); font-size:13px; text-align:center;">Lichess</div>
+                <div style="flex:1; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--faint); font-family:var(--mono); font-size:13px; text-align:center; position:relative;">
+                    Chess.com
+                    <span style="position:absolute; top:-8px; right:-8px; background:var(--accent2); color:#000; font-size:9px; font-weight:700; padding:2px 6px; border-radius:3px; letter-spacing:0.5px;">SOON</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="username">Lichess username</label>
+            <input type="text" id="username" name="username" placeholder="e.g. sajal" value="{{ username or '' }}" required autofocus>
+        </div>
+
+        <div class="field" style="margin-bottom: 24px;">
+            <label for="games">Games to analyze</label>
+            <select id="games" name="games">
+                <option value="10">Last 10</option>
+                <option value="25">Last 25</option>
+                <option value="50" selected>Last 50</option>
+                <option value="100">Last 100</option>
+                <option value="200">Last 200</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn">Generate report</button>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <div style="margin-top:20px; padding:12px 16px; background:rgba(232,149,106,0.08); border:1px solid rgba(232,149,106,0.2); border-radius:6px; font-size:12px; color:var(--accent2); line-height:1.6;">
+            Make sure you've requested <strong>computer analysis</strong> for your recent games on Lichess first. Open any game and click "Request a computer analysis". Games without analysis will be skipped.
+        </div>
+    </form>
+
+    <div class="coming-soon">
+        <div class="cs-label">COMING SOON</div>
+        <div class="cs-grid">
+            <div class="cs-item"><strong>Chess.com support</strong>Analyze your Chess.com games</div>
+            <div class="cs-item"><strong>Stockfish analysis</strong>100% game coverage locally</div>
+            <div class="cs-item"><strong>Tactic classification</strong>Identify forks, pins, skewers</div>
+            <div class="cs-item"><strong>Rating prediction</strong>Estimate gain from fixing patterns</div>
+            <div class="cs-item"><strong>Weekly email digest</strong>Automated reports to your inbox</div>
+            <div class="cs-item"><strong>Trend tracking</strong>Compare reports over time</div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <a href="https://buymeacoffee.com/sajal" target="_blank" style="color: var(--accent2);">&#9749; Buy me a coffee</a>
+        <div style="display: flex; gap: 16px;">
+            <a href="https://linkedin.com/in/chakravartysajal" target="_blank" style="color: var(--dim);">LinkedIn</a>
+            <a href="https://github.com/sajalckvt/lichess-blunder-tracker" target="_blank" style="color: var(--dim);">GitHub</a>
+        </div>
+    </div>
+</div>
+
+<script>
+const form = document.getElementById('form');
+const loader = document.getElementById('loader');
+const lt = document.getElementById('loader-text');
+const ls = document.getElementById('loader-sub');
+const msgs = [
+    ['Fetching games from Lichess...', 'This can take 10-30 seconds for 50+ games'],
+    ['Parsing game data...', 'Looking for computer analysis'],
+    ['Detecting blunders...', 'Scanning every move for errors'],
+    ['Analyzing patterns...', 'Grouping by opening and game phase'],
+    ['Generating your report...', 'Building charts and recommendations'],
+];
+form.addEventListener('submit', function() {
+    loader.classList.add('active');
+    let i = 0;
+    setInterval(function() { i = Math.min(i + 1, msgs.length - 1); lt.textContent = msgs[i][0]; ls.textContent = msgs[i][1]; }, 4000);
+});
+</script>
+</body>
+</html>
